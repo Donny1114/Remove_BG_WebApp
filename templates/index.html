@@ -4,88 +4,180 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Background Remover</title>
-    <style>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style id="theme-stylesheet">
+        /* Basic CSS Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 5px;
+            padding: 20px;
             text-align: center;
-            padding: 50px;
+            transition: background-color 0.3s, border-color 0.3s;
         }
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
+
+        .upload-area.dragover {
+            background-color: #e9ecef;
+            border-color: #0056b3;
         }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 20px;
+
+        #file-names {
+            background-color: #ffffff;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 15px;
         }
-        button:hover {
-            background-color: #0056b3;
+
+        #file-list {
+            list-style-type: none;
+            padding: 0;
         }
-        #output {
-            margin-top: 20px;
+
+        #file-list li {
+            padding: 5px 0;
+            border-bottom: 1px solid #dee2e6;
         }
-        #reset-button {
-            display: none;
-            margin-top: 20px;
+
+        #file-list li:last-child {
+            border-bottom: none;
+        }
+
+        .btn {
+            margin-top: 10px;
+        }
+
+        .dark-mode {
+            background-color: #343a40;
+            color: #ffffff;
+        }
+
+        .dark-mode .upload-area {
+            border-color: #6c757d;
+            background-color: #495057;
+        }
+
+        .dark-mode #file-names {
+            background-color: #495057;
+            border-color: #6c757d;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Background Remover</h1>
-
-        <!-- Image Upload Form -->
-        <form id="upload-form" method="POST" action="/upload" enctype="multipart/form-data">
-            <label for="image-upload">Select an image:</label><br><br>
-            <input type="file" id="image-upload" name="image" accept="image/*" required><br><br>
-            <button type="submit">Remove Background</button>
-        </form>
-
-        <!-- Output image -->
-        <div id="output">
-            <img id="output-image" style="max-width: 100%; display: none;">
+        <div class="d-flex justify-content-between align-items-center my-4">
+            <h1 class="text-center">Background Remover</h1>
+            <button id="theme-toggle" class="btn btn-secondary">Switch to Dark Mode</button>
         </div>
 
-        <!-- Reset Button -->
-        <button id="reset-button" onclick="resetApp()">Reset</button>
+        <!-- Drag and Drop Area for multiple files -->
+        <div id="upload-area" class="upload-area">
+            <p>Drag and drop images here, or <span class="btn btn-primary">Click to Upload</span></p>
+            <p id="file-names">No files uploaded</p>
+        </div>
+
+        <!-- Form for file upload (hidden) -->
+        <form id="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+            <input type="file" id="fileInput" name="images" accept="image/*" multiple style="display: none;">
+        </form>
+
+        <div class="text-center">
+            <button id="remove-bg-button" class="btn btn-primary" style="display: none;" onclick="removeBackground()">Remove Background</button>
+            <button id="reset-button" class="btn btn-danger" onclick="window.location.href='/reset';">Reset</button>
+        </div>
     </div>
 
     <script>
-        document.getElementById('upload-form').onsubmit = function (event) {
-            event.preventDefault(); // Prevent form from reloading the page
-            const formData = new FormData(this);
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('fileInput');
+        const removeBgButton = document.getElementById('remove-bg-button');
+        const fileNamesDisplay = document.getElementById('file-names');
 
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            }).then(response => response.blob())
-            .then(blob => {
-                const url = URL.createObjectURL(blob);
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
 
-                // Create a temporary link for downloading the file
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'output.png';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
+        uploadArea.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
 
-                // Display reset button after download
-                document.getElementById('reset-button').style.display = 'inline-block';
-            }).catch(error => {
-                console.error('Error:', error);
-            });
-        };
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
 
-        // Reset the view by reloading the page
-        function resetApp() {
-            window.location.href = "/reset";
+        uploadArea.addEventListener('drop', (event) => {
+            event.preventDefault();
+            uploadArea.classList.remove('dragover');
+
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                displayFileNames(files);
+                removeBgButton.style.display = 'block';  // Show "Remove Background" button
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                displayFileNames(fileInput.files);
+                removeBgButton.style.display = 'block';
+            }
+        });
+
+        function displayFileNames(files) {
+            fileNamesDisplay.innerHTML = ''; // Clear previous names
+            for (let i = 0; i < files.length; i++) {
+                const li = document.createElement('li');
+                li.textContent = files[i].name;
+                fileNamesDisplay.appendChild(li);
+            }
         }
+
+        function removeBackground() {
+            document.getElementById('upload-form').submit();
+        }
+
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const body = document.body;
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            body.classList.add('dark-mode');
+            themeToggleBtn.textContent = 'Switch to Light Mode';
+        }
+
+        themeToggleBtn.addEventListener('click', () => {
+            body.classList.toggle('dark-mode');
+            if (body.classList.contains('dark-mode')) {
+                themeToggleBtn.textContent = 'Switch to Light Mode';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                themeToggleBtn.textContent = 'Switch to Dark Mode';
+                localStorage.setItem('theme', 'light');
+            }
+        });
     </script>
 </body>
 </html>
